@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tasks Workspace</title>
+    <style>
+      :root { --bg:#0b0e14; --panel:#11151c; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; --border:#1f2937; }
+      html, body { margin:0; padding:0; height:100%; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+      header { padding:16px; border-bottom:1px solid var(--border); background:var(--panel); position:sticky; top:0; z-index:10; }
+      h1 { margin:0 0 8px; font-size:18px; }
+      .controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .controls input[type="text"], .controls input[type="number"], .controls select { background:#0f131a; color:var(--text); border:1px solid var(--border); padding:8px 10px; border-radius:6px; }
+      .controls button { background:var(--accent); color:#001018; border:0; border-radius:6px; padding:8px 12px; font-weight:600; cursor:pointer; }
+      .controls button.secondary { background:#1f2937; color:var(--text); }
+      main { display:grid; grid-template-columns: 320px 1fr; gap:0; height:calc(100% - 82px); }
+      .sidebar { border-right:1px solid var(--border); overflow:auto; }
+      .list { list-style:none; padding:0; margin:0; }
+      .list li { border-bottom:1px solid var(--border); padding:10px 12px; cursor:pointer; }
+      .list li:hover { background:#0f131a; }
+      .list .meta { color:var(--muted); font-size:12px; }
+      .content { overflow:auto; padding:16px; }
+      .task { background:#0f131a; border:1px solid var(--border); border-radius:8px; padding:12px; }
+      .task h2 { margin:0 0 8px; font-size:16px; }
+      .empty { color:var(--muted); padding:24px; }
+      .status { color:var(--muted); font-size:12px; margin-left:auto; }
+      .footer { padding:8px 16px; border-top:1px solid var(--border); color:var(--muted); background:var(--panel); }
+      .pill { display:inline-block; padding:2px 8px; border-radius:999px; border:1px solid var(--border); background:#0b1017; font-size:12px; color:var(--muted); }
+      .file-input { display:inline-block; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Tasks Workspace</h1>
+      <div class="controls">
+        <label class="file-input">
+          <input id="file" type="file" accept="application/json,.json" />
+        </label>
+        <input id="search" type="text" placeholder="Search text..." />
+        <input id="page" type="number" min="1" placeholder="Page" />
+        <select id="sort">
+          <option value="page-asc">Sort: Page ↑</option>
+          <option value="page-desc">Sort: Page ↓</option>
+        </select>
+        <button id="clearFilters" class="secondary">Clear</button>
+        <span class="status" id="status">Load tasks.json via file picker.</span>
+      </div>
+    </header>
+    <main>
+      <aside class="sidebar">
+        <ul id="list" class="list"></ul>
+      </aside>
+      <section class="content">
+        <div id="details" class="empty">No task selected. Load a JSON file produced by the crawler, then choose a task.</div>
+      </section>
+    </main>
+    <div class="footer">
+      Tip: Generate with <span class="pill">node src/crawl.js</span> then choose <span class="pill">out/tasks.json</span>.
+    </div>
+    <script>
+      const state = { tasks: [], filtered: [], selectedIndex: -1 };
+
+      const el = (id) => document.getElementById(id);
+      const listEl = el('list');
+      const detailsEl = el('details');
+      const statusEl = el('status');
+      const searchEl = el('search');
+      const pageEl = el('page');
+      const sortEl = el('sort');
+
+      function applyFilters() {
+        const q = (searchEl.value || '').toLowerCase().trim();
+        const pageFilter = parseInt(pageEl.value, 10);
+        const sort = sortEl.value;
+        let rows = state.tasks.slice();
+        if (!Number.isNaN(pageFilter)) {
+          rows = rows.filter(r => r.page === pageFilter);
+        }
+        if (q) {
+          rows = rows.filter(r => (r.text || '').toLowerCase().includes(q) || String(r.id||'').includes(q));
+        }
+        rows.sort((a,b) => sort === 'page-desc' ? (b.page - a.page) || (a.index - b.index) : (a.page - b.page) || (a.index - b.index));
+        state.filtered = rows;
+        state.selectedIndex = rows.length ? 0 : -1;
+        renderList();
+        renderDetails();
+        statusEl.textContent = rows.length ? `${rows.length} tasks` : 'No tasks match filters';
+      }
+
+      function renderList() {
+        listEl.innerHTML = '';
+        state.filtered.forEach((t, i) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<div class="meta">Page ${t.page} • #${t.index} ${t.id ? '• ID '+t.id : ''}</div><div>${escapeHtml((t.text||'').slice(0, 120))}${t.text && t.text.length>120 ? '…' : ''}</div>`;
+          li.addEventListener('click', () => { state.selectedIndex = i; renderDetails(); });
+          listEl.appendChild(li);
+        });
+        if (!state.filtered.length) {
+          const li = document.createElement('li');
+          li.className = 'empty';
+          li.textContent = 'No tasks to display.';
+          listEl.appendChild(li);
+        }
+      }
+
+      function renderDetails() {
+        if (state.selectedIndex < 0 || state.selectedIndex >= state.filtered.length) {
+          detailsEl.className = 'empty';
+          detailsEl.textContent = 'No task selected.';
+          return;
+        }
+        const t = state.filtered[state.selectedIndex];
+        detailsEl.className = 'task';
+        detailsEl.innerHTML = `
+          <h2>Page ${t.page} • #${t.index} ${t.id ? '• ID '+escapeHtml(t.id) : ''}</h2>
+          <pre style="white-space:pre-wrap;margin:0;">${escapeHtml(t.text || '')}</pre>
+        `;
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
+      }
+
+      el('file').addEventListener('change', async (ev) => {
+        const f = ev.target.files && ev.target.files[0];
+        if (!f) return;
+        try {
+          const text = await f.text();
+          const json = JSON.parse(text);
+          if (!Array.isArray(json)) throw new Error('Expected JSON array');
+          state.tasks = json;
+          applyFilters();
+          statusEl.textContent = `Loaded ${json.length} tasks`;
+        } catch (e) {
+          console.error(e);
+          statusEl.textContent = 'Failed to load JSON: ' + e.message;
+        }
+      });
+
+      searchEl.addEventListener('input', applyFilters);
+      pageEl.addEventListener('input', applyFilters);
+      sortEl.addEventListener('change', applyFilters);
+      el('clearFilters').addEventListener('click', () => {
+        searchEl.value = '';
+        pageEl.value = '';
+        sortEl.value = 'page-asc';
+        applyFilters();
+      });
+    </script>
+  </body>
+  </html>
+
+
