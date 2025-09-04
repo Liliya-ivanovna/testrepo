@@ -1,0 +1,26 @@
+{
+  "name": "testrepo",
+  "version": "1.0.0",
+  "description": "PDF crawler to extract tasks from Ukrainian Algebra 7th grade PDF (no Playwright)",
+  "main": "src/crawl.js",
+  "scripts": {
+    "start": "node src/crawl.js",
+    "crawl": "node src/crawl.js"
+  },
+  "keywords": [
+    "crawler",
+    "pdf",
+    "ukrainian",
+    "algebra",
+    "nush"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pdf-parse": "^1.1.1"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
+
